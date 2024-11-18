@@ -1,7 +1,8 @@
 import { Field, Bool } from '../wrapped.js';
 import { Struct } from '../types/struct.js';
 import { MerkleTree, BaseMerkleWitness, MerkleWitness } from '../merkle-tree.js';
-import { Proof, SelfProof, ZkProgram } from '../../proof-system/zkprogram.js';
+import { Proof } from '../../proof-system/proof.js';
+import { SelfProof, ZkProgram } from '../../proof-system/zkprogram.js';
 import { Provable } from '../provable.js';
 import { constraintSystem, print } from '../../testing/constraint-system.js';                                                                                                                             import { field, bigintField } from '../../testing/equivalent.js';
 import { Poseidon } from '../crypto/poseidon.js';
@@ -60,6 +61,8 @@ class ProvableMerkleWitness extends Struct({
   }
 }
 
+class ProofOfMKTRoot extends SelfProof<void, Field> {}
+
 //ZkProgram as a verifier for stateful Merkle-tree
 let statefulMerkleTreeVerifier = ZkProgram({
   name: 'stateful-merkle-tree-verifier',
@@ -89,8 +92,8 @@ let statefulMerkleTreeVerifier = ZkProgram({
       }
     },
     recursiveUnmodifiedMerklePathVerify: {
-      privateInputs: [Field, Field, ProvableMerkleWitness, SelfProof],
-      async method(idx: Field, leafValue: Field, witness: ProvableMerkleWitness, previousProof: SelfProof<void, Field>) {
+      privateInputs: [Field, Field, ProvableMerkleWitness, ProofOfMKTRoot],
+      async method(idx: Field, leafValue: Field, witness: ProvableMerkleWitness, previousProof: ProofOfMKTRoot) {
         previousProof.verify();
         witness.calculateIndex().assertEquals(idx);
         const root = previousProof.publicOutput;
@@ -99,8 +102,8 @@ let statefulMerkleTreeVerifier = ZkProgram({
       }
     },
     recursiveModifiedMerklePathVerify: {
-      privateInputs: [Field, Field, Field, ProvableMerkleWitness, SelfProof],
-      async method(idx: Field, updatedValue: Field, previousValue: Field, witness: ProvableMerkleWitness, previousProof: SelfProof<void, Field>) {
+      privateInputs: [Field, Field, Field, ProvableMerkleWitness, ProofOfMKTRoot],
+      async method(idx: Field, updatedValue: Field, previousValue: Field, witness: ProvableMerkleWitness, previousProof: ProofOfMKTRoot) {
         previousProof.verify();
         witness.calculateIndex().assertEquals(idx);
         witness.calculateRoot(previousValue).assertEquals(previousProof.publicOutput);
@@ -110,10 +113,12 @@ let statefulMerkleTreeVerifier = ZkProgram({
   }
 });
 
+//const SMKTSelfProof = ZkProgram.Proof(statefulMerkleTreeVerifier);
+
 // Stateful Merkle-tree API
 class StatefulMerkleTree {
   tree: MerkleTree;
-  stateProof: Proof<void, Field>;
+  stateProof: SelfProof<void, Field>;
   leafCount: bigint;
   PathWitness: typeof BaseMerkleWitness;
 
@@ -127,24 +132,30 @@ class StatefulMerkleTree {
   async access(idx: bigint) {
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(idx).toBeLessThan(this.leafCount);
+    const idxAsWitness = Provable.witness(Field, () => {
+      return idx;
+    });
     const val = this.tree.getLeaf(idx);
     const merklePathWitness = ProvableMerkleWitness.from(new this.PathWitness(this.tree.getWitness(idx)));
     if (this.stateProof && this.stateProof.shouldVerify.toBoolean())
-      this.stateProof = await statefulMerkleTreeVerifier.recursiveUnmodifiedMerklePathVerify(Field(idx), val, merklePathWitness, this.stateProof);
+      this.stateProof = await statefulMerkleTreeVerifier.recursiveUnmodifiedMerklePathVerify(idxAsWitness, val, merklePathWitness, this.stateProof);
     else
-      this.stateProof = await statefulMerkleTreeVerifier.unmodifiedMerklePathVerify(Field(idx), val, this.tree.getRoot(), merklePathWitness);
+      this.stateProof = await statefulMerkleTreeVerifier.unmodifiedMerklePathVerify(idxAsWitness, val, this.tree.getRoot(), merklePathWitness);
     return val;
   }
 
   async update(idx: bigint, newVal: Field) {
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(idx).toBeLessThan(this.leafCount);
+    const idxAsWitness = Provable.witness(Field, () => {
+      return idx;
+    });
     const val = this.tree.getLeaf(idx);
     const merklePathWitness = ProvableMerkleWitness.from(new this.PathWitness(this.tree.getWitness(idx)));
     if (this.stateProof && this.stateProof.shouldVerify.toBoolean())
-      this.stateProof = await statefulMerkleTreeVerifier.recursiveModifiedMerklePathVerify(Field(idx), newVal, val, merklePathWitness, this.stateProof);
+      this.stateProof = await statefulMerkleTreeVerifier.recursiveModifiedMerklePathVerify(idxAsWitness, newVal, val, merklePathWitness, this.stateProof);
     else
-      this.stateProof = await statefulMerkleTreeVerifier.modifiedMerklePathVerify(Field(idx), newVal, val, this.tree.getRoot(), merklePathWitness);
+      this.stateProof = await statefulMerkleTreeVerifier.modifiedMerklePathVerify(idxAsWitness, newVal, val, this.tree.getRoot(), merklePathWitness);
     this.tree.setLeaf(idx, newVal);
   }
 
@@ -158,17 +169,7 @@ class StatefulMerkleTree {
 
 // building constraint systems, failed with runtime or verification error
 
-console.log('sizeInFields' in SelfProof);
-
-constraintSystem.fromZkProgram(
-  statefulMerkleTreeVerifier,
-  //'selfVerify',
-  'unmodifiedMerklePathVerify',
-  //'modifiedMerklePathVerify',
-  //'recursiveUnmodifiedMerklePathVerify',
-  //'recursiveModifiedMerklePathVerify',
-  print
-);
+console.log(await statefulMerkleTreeVerifier.analyzeMethods());
 
 
 // This is not the correct usage of bigintField, but where is the referrence to the correct usage?
@@ -184,7 +185,7 @@ console.log(
   })
 );
 */
-
+/*
 // Ridiculous analysis result of the circuits...
 console.time('Stateful Merkle-tree verifier: compile');
 await statefulMerkleTreeVerifier.compile();
