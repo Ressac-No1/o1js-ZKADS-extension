@@ -15,7 +15,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     _Security_ in case of vulnerabilities.
  -->
 
-## [Unreleased](https://github.com/o1-labs/o1js/compare/e1bac02...HEAD)
+## [Unreleased](https://github.com/o1-labs/o1js/compare/c03f2177d...HEAD)
+
+## [2.1.1](https://github.com/o1-labs/o1js/compare/1ad7333e9e...c03f2177d) - 2024-11-26
 
 ## [2.1.0](https://github.com/o1-labs/o1js/compare/b04520d...e1bac02) - 2024-11-13
 
