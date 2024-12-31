@@ -75,7 +75,7 @@ The stateful authenticated data structure modules are ready in production once t
 - 5,000 MINA for updating the documentation
 
 ### Wallet Address
-B62qj3ZUdTabjzjCCrQH8NvwE72yLS4SFLJdZyXw7vi4WVNjZbCEHnX
+B62qr4m8vjn5C1obEmMNNKoiwE6HrEWEuoBz49qYLsB3XHjcuD67PLy
 
 ## Team Info
 This project will be completed by RSSCNo1 solely.
